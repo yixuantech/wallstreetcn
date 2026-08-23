@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://www.pushplus.plus/send\" -X POST -H \"Content-Type: application/json\" -d '{\"title\":\"test\",\"content\":\"test\"}')",
+      "Bash(curl -s \"https://sctapi.ftqq.com/test\" -H \"User-Agent: Mozilla/5.0\")",
+      "Bash(curl -s \"https://sctapi.ftqq.com/testkey.send\" -H \"User-Agent: Mozilla/5.0\")",
+      "Bash(curl -s \"https://sct.ftqq.com/\" -H \"User-Agent: Mozilla/5.0\" -o /tmp/sct_main.html)",
+      "Bash(curl -s \"https://sctapi.ftqq.com/testkey.send\" -X POST -H \"Content-Type: application/json\" -d '{\"title\":\"测试标题\",\"desp\":\"测试内容\"}')",
+      "Bash(curl -s \"https://sctapi.ftqq.com/testkey.send\" -X POST -d \"title=测试标题&desp=测试内容\")",
+      "Bash(where node *)",
+      "Bash(where go *)",
+      "Bash(go version *)",
+      "Bash(where java *)",
+      "Bash(java --version)",
+      "Bash(ls -la \"e:\\\\MyProject\\\\ExploratoryProject\\\\wallstreetcn\\\\\")",
+      "Read(//e/MyProject/ExploratoryProject/**)",
+      "Bash(pip install *)",
+      "Bash(where pip *)",
+      "Bash(python -c \"from src.config import Config; print\\('config OK'\\); from src.utils import html_to_text, today_str; print\\('utils OK'\\); from src.fetcher import BreakfastArticle, MarketQuote; print\\('fetcher OK'\\); from src.analyzer import analyze, extract_verdict; print\\('analyzer OK'\\); from src.pusher import FeishuPush; print\\('pusher OK'\\)\")",
+      "WebFetch(domain:open.feishu.cn)",
+      "WebFetch(domain:www.feishu.cn)",
+      "Bash(py --version)",
+      "Bash(winget install *)"
+    ]
+  }
+}

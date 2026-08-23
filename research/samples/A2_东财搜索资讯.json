@@ -1,0 +1,25 @@
+{
+  "bizCode": "",
+  "bizMsg": "",
+  "code": 0,
+  "extra": {},
+  "hitsTotal": 1,
+  "msg": "OK",
+  "result": {
+    "passportWeb": [
+      {
+        "uid": "8223456637392854",
+        "stockFollowerCount": 7289,
+        "alias": "<em>达利食品</em>",
+        "postCount": 0,
+        "fansCount": 0,
+        "portrait": "https://avator.eastmoney.com/qface/8223456637392854/180",
+        "url": "http://iguba.eastmoney.com/8223456637392854",
+        "introduction": " ",
+        "userFollowingCount": 0,
+        "userSelectStockCount": 0
+      }
+    ]
+  },
+  "searchId": "b93a1e15-8497-4b4c-a4c8-744305b6f2d8"
+}
