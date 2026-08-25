@@ -1,0 +1,51 @@
+{
+  "version": "65f75399d01a501048a3b578fda4e5c6",
+  "result": {
+    "pages": 75,
+    "data": [
+      {
+        "REPORT_DATE": "2026-07-01 00:00:00",
+        "TIME": "2026年07月份",
+        "BASIC_CURRENCY": 3555077.24,
+        "BASIC_CURRENCY_SAME": 7.7,
+        "BASIC_CURRENCY_SEQUENTIAL": -0.33728131,
+        "CURRENCY": 1154623,
+        "CURRENCY_SAME": 4,
+        "CURRENCY_SEQUENTIAL": -2.54499939,
+        "FREE_CASH": 148202.86,
+        "FREE_CASH_SAME": 11.6,
+        "FREE_CASH_SEQUENTIAL": 0.56870437
+      },
+      {
+        "REPORT_DATE": "2026-06-01 00:00:00",
+        "TIME": "2026年06月份",
+        "BASIC_CURRENCY": 3567108.43,
+        "BASIC_CURRENCY_SAME": 8,
+        "BASIC_CURRENCY_SEQUENTIAL": 0.86011268,
+        "CURRENCY": 1184775.53,
+        "CURRENCY_SAME": 4,
+        "CURRENCY_SEQUENTIAL": 3.12336916,
+        "FREE_CASH": 147364.79,
+        "FREE_CASH_SAME": 11.8,
+        "FREE_CASH_SEQUENTIAL": 0.34733649
+      },
+      {
+        "REPORT_DATE": "2026-05-01 00:00:00",
+        "TIME": "2026年05月份",
+        "BASIC_CURRENCY": 3536688.92,
+        "BASIC_CURRENCY_SAME": 8.6,
+        "BASIC_CURRENCY_SEQUENTIAL": 0.17742084,
+        "CURRENCY": 1148891.41,
+        "CURRENCY_SAME": 5.5,
+        "CURRENCY_SEQUENTIAL": 0.26685198,
+        "FREE_CASH": 146854.71,
+        "FREE_CASH_SAME": 11.9,
+        "FREE_CASH_SEQUENTIAL": -0.4222139
+      }
+    ],
+    "count": 223
+  },
+  "success": true,
+  "message": "ok",
+  "code": 0
+}

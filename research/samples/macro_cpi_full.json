@@ -1,0 +1,60 @@
+{
+  "version": "349b7af2905285a777974ea9d87f0e2e",
+  "result": {
+    "pages": 75,
+    "data": [
+      {
+        "REPORT_DATE": "2026-07-01 00:00:00",
+        "TIME": "2026年07月份",
+        "NATIONAL_SAME": 0.5,
+        "NATIONAL_BASE": 100.5,
+        "NATIONAL_SEQUENTIAL": -0.1,
+        "NATIONAL_ACCUMULATE": 100.9,
+        "CITY_SAME": 0.5,
+        "CITY_BASE": 100.5,
+        "CITY_SEQUENTIAL": -0.1,
+        "CITY_ACCUMULATE": 101,
+        "RURAL_SAME": 0.4,
+        "RURAL_BASE": 100.4,
+        "RURAL_SEQUENTIAL": -0.2,
+        "RURAL_ACCUMULATE": 100.7
+      },
+      {
+        "REPORT_DATE": "2026-06-01 00:00:00",
+        "TIME": "2026年06月份",
+        "NATIONAL_SAME": 1,
+        "NATIONAL_BASE": 101,
+        "NATIONAL_SEQUENTIAL": -0.3,
+        "NATIONAL_ACCUMULATE": 101,
+        "CITY_SAME": 1,
+        "CITY_BASE": 101,
+        "CITY_SEQUENTIAL": -0.4,
+        "CITY_ACCUMULATE": 101,
+        "RURAL_SAME": 0.8,
+        "RURAL_BASE": 100.8,
+        "RURAL_SEQUENTIAL": -0.3,
+        "RURAL_ACCUMULATE": 100.8
+      },
+      {
+        "REPORT_DATE": "2026-05-01 00:00:00",
+        "TIME": "2026年05月份",
+        "NATIONAL_SAME": 1.2,
+        "NATIONAL_BASE": 101.2,
+        "NATIONAL_SEQUENTIAL": -0.1,
+        "NATIONAL_ACCUMULATE": 101,
+        "CITY_SAME": 1.3,
+        "CITY_BASE": 101.3,
+        "CITY_SEQUENTIAL": -0.1,
+        "CITY_ACCUMULATE": 101,
+        "RURAL_SAME": 1.1,
+        "RURAL_BASE": 101.1,
+        "RURAL_SEQUENTIAL": -0.1,
+        "RURAL_ACCUMULATE": 100.8
+      }
+    ],
+    "count": 223
+  },
+  "success": true,
+  "message": "ok",
+  "code": 0
+}

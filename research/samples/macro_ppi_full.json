@@ -1,0 +1,33 @@
+{
+  "version": "d9d90a4dc9a9a8434fd6c2918c950362",
+  "result": {
+    "pages": 83,
+    "data": [
+      {
+        "REPORT_DATE": "2026-07-01 00:00:00",
+        "TIME": "2026年07月份",
+        "BASE": 103.5,
+        "BASE_SAME": 3.5,
+        "BASE_ACCUMULATE": 101.8
+      },
+      {
+        "REPORT_DATE": "2026-06-01 00:00:00",
+        "TIME": "2026年06月份",
+        "BASE": 104.1,
+        "BASE_SAME": 4.1,
+        "BASE_ACCUMULATE": 101.5
+      },
+      {
+        "REPORT_DATE": "2026-05-01 00:00:00",
+        "TIME": "2026年05月份",
+        "BASE": 103.9,
+        "BASE_SAME": 3.9,
+        "BASE_ACCUMULATE": 101
+      }
+    ],
+    "count": 247
+  },
+  "success": true,
+  "message": "ok",
+  "code": 0
+}

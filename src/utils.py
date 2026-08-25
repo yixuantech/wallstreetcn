@@ -1,5 +1,6 @@
-"""工具函数 — HTML清洗、日期处理、去重管理"""
+"""工具函数 — HTML清洗、日期处理、去重管理、交易日判断"""
 
+import json
 import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -60,6 +61,27 @@ def is_today(timestamp: int) -> bool:
     ts_date = datetime.fromtimestamp(timestamp, tz=CST).date()
     today_date = datetime.now(CST).date()
     return ts_date == today_date
+
+
+def is_trading_day(date=None) -> bool:
+    """是否A股交易日。周末 False；法定假日查 data/state/holidays.json。
+
+    holidays.json 格式：{"2026": ["2026-01-01", "2026-02-16", ...]}
+    每年初手动维护一次（含调休，周末本身已排除，只需列工作日的假日）。
+    文件缺失时退化为仅判周末（节假日误推送由文章去重兜底：假日无早餐FM文章自然退出）。
+    """
+    d = date or datetime.now(CST).date()
+    if d.weekday() >= 5:          # 周六周日
+        return False
+    holiday_file = Path(__file__).parent.parent / "data" / "state" / "holidays.json"
+    if holiday_file.exists():
+        try:
+            holidays = json.loads(holiday_file.read_text(encoding="utf-8"))
+            if d.strftime("%Y-%m-%d") in holidays.get(str(d.year), []):
+                return False
+        except (json.JSONDecodeError, OSError):
+            pass
+    return True
 
 
 # ── 去重管理 ──
