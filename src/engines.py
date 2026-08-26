@@ -546,3 +546,111 @@ def format_watchpoints_prompt(wp: dict) -> str:
     if wp.get("added"):
         lines.append(f"\n今日新增：{'、'.join(wp['added'][:5])}")
     return "\n".join(lines)
+
+
+# ═══════════════ 历史模式锚（M4：晚报归档 → 晨报模式库） ═══════════════
+
+ARCHIVE_CAP = 150       # 事件归档上限（约3个月的要闻方向验证记录）
+
+
+def archive_pattern_events(sb: dict) -> int:
+    """晚报：记分牌中"已对上品种"的要闻方向标注 → 事件归档（模式锚原材料）。
+
+    只归档有 vs/result 的条目——对不上品种的没有结果，不可复盘。
+    Returns: 本次归档条数
+    """
+    if sb.get("status") != "ok":
+        return 0
+    entries = [m for m in sb.get("news_marks", []) if m.get("vs") and m.get("result")]
+    if not entries:
+        return 0
+    archive = state._load_json("event_archive.json", [])
+    for m in entries:
+        archive.append({"date": TODAY(), "title": m.get("title", ""),
+                        "mark": m.get("mark", ""), "vs": m["vs"], "result": m["result"]})
+    state._save_json("event_archive.json", archive[-ARCHIVE_CAP:])
+    return len(entries)
+
+
+def format_pattern_bank(n: int = 12) -> str:
+    """晨报：最近归档事件 → 模式库数据块。空库返回空串（调用方标注"积累中"）。"""
+    archive = state._load_json("event_archive.json", [])
+    if not archive:
+        return ""
+    lines = []
+    for e in reversed(archive[-n:]):        # 最新在前
+        d = str(e.get("date", ""))[5:].replace("-", "/")
+        lines.append(f"- {d}「{e.get('title', '')}」[{e.get('mark', '')}] → "
+                     f"{e.get('vs', '')} {e.get('result', '')}")
+    return "\n".join(lines)
+
+
+# ═══════════════ 周报原料（M4：记分周汇总/观察点结算/下周日历） ═══════════════
+
+def weekly_judgment_stats(rows: list) -> dict:
+    """本周判断流水 → 胜率统计。✓=1分，部分=0.5分，其余=0分。"""
+    if not rows:
+        return {"total": 0, "score": 0.0, "rate": None, "rows": []}
+    score = sum(1.0 if r.get("result") == "✓"
+                else 0.5 if r.get("result") == "部分" else 0.0 for r in rows)
+    return {"total": len(rows), "score": score,
+            "rate": round(score / len(rows) * 100), "rows": rows}
+
+
+def format_weekly_judgments(stats: dict) -> str:
+    """记分周汇总 → 周报数据块"""
+    lines = ["## 记分周汇总（胜率由规则计算，不可修改）"]
+    if not stats["rows"]:
+        lines.append("\n- 本周无记分流水（晨报预判快照缺失或本周未运行）")
+        return "\n".join(lines)
+    lines.append(f"\n- 本周胜率 **{stats['rate']}%**（得分{stats['score']:g}/{stats['total']}条；"
+                 f"✓=1分，部分=0.5分）")
+    for r in stats["rows"]:
+        detail = f"（{r['detail']}）" if r.get("detail") else ""
+        lines.append(f"- {r['date'][5:]} 预判「{r['judgment']}」 vs 实际{r['actual']} → "
+                     f"{r['result']}{detail}")
+    return "\n".join(lines)
+
+
+def format_weekly_watchpoints(week_start: str) -> str:
+    """观察点周结算 → 周报数据块（本周resolved + 仍挂起清单）"""
+    data = state.load_watchpoints()
+    resolved = [w for w in data.get("history", []) if w.get("resolved", "") >= week_start]
+    active = data.get("active", [])
+    lines = ["## 观察点结算（状态由规则维护，不可修改）"]
+    if not resolved and not active:
+        lines.append("\n- 本周无观察点记录")
+        return "\n".join(lines)
+    if resolved:
+        lines.append("\n本周已结算：")
+        for w in resolved:
+            ev = f"（证据：{w.get('evidence', '')}）" if w.get("evidence") else ""
+            lines.append(f"- {w['status']} {w['stock']}·{w['kind']}（节点{w['date'][5:]}）{ev}")
+    if active:
+        lines.append("\n仍挂起（下周到期在前）：")
+        for w in sorted(active, key=lambda x: x.get("date", ""))[:10]:
+            lines.append(f"- {w['status']} {w['stock']}·{w['kind']}（节点{w['date'][5:]}）")
+    return "\n".join(lines)
+
+
+def format_next_calendar(cal_stocks: list, us_cal: list, cn_cal: list,
+                        days: int = 14) -> str:
+    """下周日历 → 周报数据块（自选股日历 + 美国发布日 + 中国惯例窗口）。
+
+    us_cal/cn_cal: [(日期'YYYY-MM-DD', 文本)]，规则层已按需标注"预计"。
+    """
+    horizon = (datetime.now(CST) + timedelta(days=days)).strftime("%Y-%m-%d")
+    items = []
+    for s in cal_stocks:
+        for ev in getattr(s, "calendar_events", []):
+            if TODAY() <= ev.get("date", "") <= horizon:
+                items.append((ev["date"], f"{s.name}·{ev['kind']}", ev.get("text", "")))
+    for d, text in list(us_cal) + list(cn_cal):
+        items.append((d, text, ""))
+    if not items:
+        return "## 下周日历\n\n⚠️ 未来两周无已登记节点（自选股日历与宏观数据日均未命中）"
+    items.sort()
+    lines = ["## 下周日历（规则采集，不可修改）"]
+    for d, text, note in items:
+        lines.append(f"- {d[5:]} {text}{'｜' + note if note else ''}")
+    return "\n".join(lines)

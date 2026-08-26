@@ -9,7 +9,7 @@
   macro_cn   数据解读·中国档（数据落地日18:30推送）
   macro_us   数据解读·美国档（美国数据落地次晨07:45推送）
   night      夜巡（🔴关键词命中才推紧急警报，20:30）
-  weekly     周报（周六09:00，待建）
+  weekly     周报（主线周演进+记分胜率+观察点结算+下周日历，周六09:00）
 """
 
 import sys
@@ -21,22 +21,28 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.config import Config
 from src.fetcher import get_latest_breakfast, get_all_market_data, format_market_data
 from src.analyzer import (analyze, analyze_evening, analyze_noon, analyze_alert,
-                          analyze_macro, extract_verdict, split_meta)
+                          analyze_macro, analyze_weekly, extract_verdict, split_meta)
 from src.market_close import collect_close_panorama, format_close_prompt, _tencent_index
 from src.macro_data import (collect_cn, collect_us, landed_cn, landed_us,
                             mark_seen_cn, mark_seen_us, concept_cards,
-                            format_macro_prompt, CN_INDICATORS, US_INDICATORS)
+                            format_macro_prompt, next_publish_calendar,
+                            cn_release_forecast, CN_INDICATORS, US_INDICATORS)
 from src.engines import (sentiment_gauge, archive_sentiment, format_sentiment_prompt,
                          scoreboard, format_scoreboard_prompt, scoreboard_summary,
                          update_watchpoints, format_watchpoints_prompt,
                          scan_new_events, scan_red_alerts, filter_flagged,
-                         format_noon_prompt, format_alert_prompt, macro_compare)
+                         format_noon_prompt, format_alert_prompt, macro_compare,
+                         archive_pattern_events, format_pattern_bank,
+                         weekly_judgment_stats, format_weekly_judgments,
+                         format_weekly_watchpoints, format_next_calendar)
 from src.pusher import PushPlusPush
 from src.utils import (is_already_processed, mark_processed, today_str,
-                       is_today, cleanup_old_ids, is_trading_day)
+                       is_today, cleanup_old_ids, is_trading_day, monday_of)
 from src.watchlist import (collect_all, format_watchlist_prompt,
                            format_close_watchlist_prompt, label_summary,
-                           LABEL_RED, LABEL_YELLOW)
+                           collect_calendar_only, LABEL_RED, LABEL_YELLOW)
+from src.storylines import (merge_storylines, format_storylines_prompt,
+                            format_weekly_storylines)
 from src import state
 from src.utils import CST
 
@@ -82,14 +88,28 @@ def cmd_morning():
     watchlist_stocks = collect_all()
     watchlist_data = format_watchlist_prompt(watchlist_stocks) if watchlist_stocks else ""
 
+    # 5.6 主线连载状态 + 历史模式库（M4：主线JSON进出晨报）
+    storyline_lines = state.load_storylines().get("lines", [])
+    storylines_block = format_storylines_prompt(storyline_lines)
+    pattern_bank = format_pattern_bank()
+
     # 6. AI分析（含机器可读预判块）
-    raw_report = analyze(article.content_text, market_data, watchlist_data)
+    raw_report = analyze(article.content_text, market_data, watchlist_data,
+                         storylines_block, pattern_bank)
 
     # 6.5 剥离预判块 → 干净报告 + 判断快照
     report, meta = split_meta(raw_report)
     verdict = extract_verdict(report)
     print(f"[Morning] 今日预判: {verdict}"
           + (f"（快照: {meta['direction']}）" if meta else "（预判块缺失，晚报记分将跳过）"))
+
+    # 6.6 主线合并（AI提案 → 规则裁决；预判块损坏则保持原样）
+    if meta is not None:
+        new_lines, sl_changes = merge_storylines(storyline_lines, meta.get("storylines"))
+        state.save_storylines({"lines": new_lines})
+        active_n = sum(1 for l in new_lines if l.get("status") != "终结")
+        note = f"，变更: {'；'.join(sl_changes)}" if sl_changes else ""
+        print(f"[Morning] 主线合并完成（活跃{active_n}条{note}）")
 
     # 7. 报告落盘（地基：晚报记分与周报的原材料）
     report_dir = Path("data/reports")
@@ -184,6 +204,11 @@ def cmd_evening():
             "detail": f"板块✓{sec_hits}/{len(sb['sectors'])}；情绪{gauge.get('score')}",
         })
     print(f"[Evening] 记分牌: {scoreboard_summary(sb)}")
+
+    # 4.5 事件归档（M4历史模式锚原材料：只归档对上品种的条目，周报/晨报模式库复用）
+    archived = archive_pattern_events(sb)
+    if archived:
+        print(f"[Evening] 模式库归档{archived}条")
 
     # 5. 观察点状态机（挂起/兑现/失效）
     wp = update_watchpoints(stocks)
@@ -444,6 +469,58 @@ def _watch_names() -> list:
     return [w.get("name", "") for w in load_watchlist()]
 
 
+def cmd_weekly():
+    """周报：主线周演进+记分周汇总+观察点结算+下周日历（周六09:00，非交易日也运行）"""
+    print(f"{'='*60}")
+    print(f"  AI盘报 · 周报")
+    print(f"  运行时间: {datetime.now(CST).strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"{'='*60}")
+
+    missing = Config.validate()
+    if missing:
+        print(f"[错误] 缺少必填配置: {', '.join(missing)}")
+        sys.exit(1)
+
+    today = state.load_today()
+    if today.get("weekly_pushed"):
+        print("[Weekly] 今日周报已推送过，退出")
+        return
+
+    date_str = datetime.now(CST).strftime("%Y-%m-%d")
+    week_start = monday_of(date_str)
+
+    # 1. 原料组装（全规则层，各块独立降级；周六只做轻量日历采集，不碰行情）
+    lines = state.load_storylines().get("lines", [])
+    stats = weekly_judgment_stats(state.load_judgments(week_start, date_str))
+    cal_stocks = collect_calendar_only()
+    us_cal = next_publish_calendar(14)
+    cn_cal = cn_release_forecast(14)
+    data_blocks = "\n\n".join([
+        format_weekly_storylines(lines, week_start),
+        format_weekly_judgments(stats),
+        format_weekly_watchpoints(week_start),
+        format_next_calendar(cal_stocks, us_cal, cn_cal),
+    ])
+
+    # 2. AI周报（只叙述不判定）
+    report = analyze_weekly(data_blocks)
+
+    # 3. 落盘 + 推送
+    report_path = Path("data/reports") / f"{date_str}-weekly.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    print(f"[Weekly] 报告已落盘: {report_path}")
+
+    rate_txt = f"记分胜率{stats['rate']}%" if stats["rate"] is not None else "本周无记分"
+    week_txt = f"{week_start[5:].replace('-', '/')}当周"
+    title = f"📖 AI盘报·周报 | {week_txt} | {rate_txt}"
+    PushPlusPush().push(title, report)
+
+    today["weekly_pushed"] = True
+    state.save_today(today)
+    print("[Weekly] 完成！")
+
+
 def _not_built(name: str):
     def cmd():
         print(f"[{name}] 该栏目待建（见 doc/实现规划.md），今日不执行")
@@ -457,7 +534,7 @@ COMMANDS = {
     "macro_cn": cmd_macro_cn,
     "macro_us": cmd_macro_us,
     "night": cmd_night,
-    "weekly": _not_built("Weekly"),
+    "weekly": cmd_weekly,
 }
 
 

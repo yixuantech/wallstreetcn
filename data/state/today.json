@@ -1,25 +1,7 @@
 {
-  "date": "2026-08-25",
+  "date": "2026-08-26",
   "morning": {},
-  "noon_pushed": true,
-  "night_pushed": true,
-  "evening": {
-    "pushed": true,
-    "report_path": "data\\reports\\2026-08-25-evening.md",
-    "sentiment": 83,
-    "sentiment_label": "亢奋",
-    "scoreboard": "无记分"
-  },
-  "pushed_event_ids": [
-    "http://finance.eastmoney.com/a/202608253853302766.html",
-    "http://finance.eastmoney.com/a/202608253852668876.html",
-    "http://finance.eastmoney.com/a/202608253852555396.html",
-    "http://finance.eastmoney.com/a/202608253853174213.html",
-    "http://finance.eastmoney.com/a/202608253851662140.html",
-    "https://data.eastmoney.com/notices/detail/300750/AN202608251828412217.html",
-    "http://caifuhao.eastmoney.com/news/20260825160210560729950",
-    "http://finance.eastmoney.com/a/202608253853085459.html",
-    "http://finance.eastmoney.com/a/202608253851706518.html"
-  ],
-  "macro_cn_pushed": true
+  "noon_pushed": false,
+  "night_pushed": false,
+  "weekly_pushed": true
 }

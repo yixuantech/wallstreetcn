@@ -41,25 +41,25 @@ python tests/smoke_watchlist.py
 
 ```cron
 # ============ 华尔街见闻自选股系统 ============
-# 工作日·晨报（现已上线；M0 完成前临时用 main.py，完成后切换）
+# 工作日·晨报（已上线）
 30 7 * * 1-5  cd /opt/wallstreetcn && ./venv/bin/python runner.py morning  >> logs/morning.log 2>&1
 
-# 工作日·数据解读美国档（待建，上线后取消注释）
+# 工作日·数据解读美国档（已建成验收，部署时取消注释）
 # 45 7 * * 1-5  cd /opt/wallstreetcn && ./venv/bin/python runner.py macro_us >> logs/macro_us.log 2>&1
 
-# 工作日·午间快讯（待建）
+# 工作日·午间快讯（已建成验收，部署时取消注释）
 # 35 11 * * 1-5  cd /opt/wallstreetcn && ./venv/bin/python runner.py noon    >> logs/noon.log 2>&1
 
-# 工作日·晚报（待建）
+# 工作日·晚报（已建成验收，部署时取消注释）
 # 30 17 * * 1-5  cd /opt/wallstreetcn && ./venv/bin/python runner.py evening >> logs/evening.log 2>&1
 
-# 工作日·数据解读中国档（待建）
+# 工作日·数据解读中国档（已建成验收，部署时取消注释）
 # 30 18 * * 1-5  cd /opt/wallstreetcn && ./venv/bin/python runner.py macro_cn >> logs/macro_cn.log 2>&1
 
-# 工作日·夜巡紧急警报（待建）
+# 工作日·夜巡紧急警报（已建成验收，部署时取消注释）
 # 30 20 * * 1-5  cd /opt/wallstreetcn && ./venv/bin/python runner.py night   >> logs/night.log 2>&1
 
-# 周六·周报（待建）
+# 周六·周报（已上线；部署时取消注释）
 # 0 9 * * 6  cd /opt/wallstreetcn && ./venv/bin/python runner.py weekly >> logs/weekly.log 2>&1
 ```
 

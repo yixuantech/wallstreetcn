@@ -21,3 +21,6 @@ logs/
 
 # 自选股个人配置（含持仓信息，不入库）
 data/watchlist.json
+
+# ZCode 会话产物
+.zcode/

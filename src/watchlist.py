@@ -520,6 +520,26 @@ def collect_all() -> list[StockInfo]:
     return stocks
 
 
+def collect_calendar_only() -> list:
+    """轻量采集：只拉日历事件（周六周报"下周日历"用）。
+
+    不碰行情/资讯/研报（周末全量采集既慢又语义不符）；
+    fetch_calendar 走 datacenter 报表，非交易日完全可用。
+    """
+    items = load_watchlist()
+    if not items:
+        return []
+    stocks = [StockInfo(code=str(it["code"]).zfill(6), name=it.get("name", ""),
+                        note=it.get("note", "")) for it in items]
+    print(f"[Watchlist] 轻量采集 {len(stocks)} 只自选股的日历...")
+    for s in stocks:
+        s.calendar = _safe(fetch_calendar, s, "日历") or []
+        n = len(s.calendar_events)
+        print(f"[Watchlist] {s.name}({s.code}): 日历事件{n}条"
+              + (f"（{'、'.join(ev['kind'] for ev in s.calendar_events)}）" if n else ""))
+    return stocks
+
+
 def format_watchlist_prompt(stocks: list[StockInfo]) -> str:
     """拼装给AI的数据块（含标签、链接、温度计、成色）"""
     blocks = []

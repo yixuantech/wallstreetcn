@@ -106,3 +106,20 @@ def append_judgment(row: dict) -> None:
         if is_new:
             writer.writeheader()
         writer.writerow({k: row.get(k, "") for k in JUDGMENT_FIELDS})
+
+
+def load_judgments(date_from: str, date_to: str) -> list:
+    """读 judgments.csv，过滤 [date_from, date_to] 闭区间的流水（周报用）。
+
+    文件不存在/损坏返回 []（降级不阻断）。
+    """
+    path = STATE_DIR / "judgments.csv"
+    if not path.exists():
+        return []
+    try:
+        with open(path, encoding="utf-8", newline="") as f:
+            return [row for row in csv.DictReader(f)
+                    if row.get("date") and date_from <= row["date"] <= date_to]
+    except (OSError, csv.Error) as e:
+        print(f"[State] judgments.csv 读取失败(降级为空): {e}")
+        return []

@@ -17,12 +17,26 @@ ANALYSIS_PROMPT = """请基于以下华尔街见闻早餐FM的内容和实时市
 ## 实时市场数据
 {market_data}
 
+## 主线连载状态（系统维护的当前地图）
+{storylines_block}
+
+## 历史模式库（自家归档的要闻方向验证记录）
+{pattern_block}
+
 ## 报告要求
 
 请严格按照以下格式输出：
 
 ### 🌍 全球要闻
-提取5-8条最重要的全球财经事件，每条用一句话概括，标注影响方向（利好/利空/中性）
+提取5-8条最重要的全球财经事件，每条用一句话概括，标注影响方向（利好/利空/中性）。
+若某条要闻与"历史模式库"中的归档事件同类，在该条末尾附一句：
+⚓上次同类（M/D）→当时品种表现与验证结果。模式库为空或无同类条目则不加锚，禁止编造库外锚。
+
+### 📌 主线追踪
+基于上方「主线连载状态」表输出主线地图：每条活跃主线一行
+（编号+名称+状态+第N周+今日一句话进展，今日有催化时点名催化事件）。
+新主线诞生标✨并说明诞生逻辑；状态发生变化标注（如 发酵→主导）；走完的主线标🏁。
+主线标准：能连续多日驱动多个板块的宏观/产业叙事，单日题材不构成主线。
 
 ### 📊 隔夜市场表现
 **必须用表格展示以下所有类别，每个类别不可省略：**
@@ -114,9 +128,14 @@ META_PROMPT = """
 在报告全部正文输出完毕后，最后另起一块输出以下JSON（ fenced code block，语言标记json），
 用于系统次日验证预判，不会推送给用户：
 {"direction": "看多|看偏多|看平|看偏空|看空", "sectors": ["重点关注板块1", "板块2"],
- "news_marks": [{"title": "要闻关键词(10字内)", "mark": "利好|利空|中性"}]}
+ "news_marks": [{"title": "要闻关键词(10字内)", "mark": "利好|利空|中性"}],
+ "storylines": [{"id": 1, "name": "主线名", "status": "孕育|发酵|主导|退潮|终结",
+                 "progress": "今日进展一句话(30字内)"}]}
 要求：direction 与「今日A股预判」板块一致；sectors 为该板块列出的关注板块；
-news_marks 列出「全球要闻」中方向标注明确的主要条目（不超过8条）。只输出这一个JSON块。"""
+news_marks 列出「全球要闻」中方向标注明确的主要条目（不超过8条）；
+storylines 覆盖「主线连载状态」表的全部活跃主线（id与name沿用原表值），按今日信息
+更新status/progress，可新增今日诞生的新主线（不填id），可将已走完的主线status标"终结"。
+status只能取五个值之一。只输出这一个JSON块。"""
 
 EVENING_PROMPT = """你是AI盘报的晚报编辑。以下数据块全部为系统规则引擎核实的收盘事实
 （收盘全景/情绪刻度/判断记分牌/自选股），你的职责是解释和串联，不是重新判定。
@@ -212,13 +231,16 @@ def _call_llm(prompt: str) -> str:
     return ""
 
 
-def analyze(article_text: str, market_data: str = "", watchlist_data: str = "") -> str:
+def analyze(article_text: str, market_data: str = "", watchlist_data: str = "",
+            storylines_block: str = "", pattern_block: str = "") -> str:
     """调用DeepSeek API生成晨报分析报告
 
     Args:
         article_text: 早餐FM纯文本正文
         market_data: 格式化的市场行情文本
         watchlist_data: 自选股数据块（空则报告不含自选股板块）
+        storylines_block: 主线连载状态表（M4，空则标注未提供）
+        pattern_block: 历史模式库数据块（M4，空则标注积累中）
 
     Returns:
         Markdown格式的分析报告
@@ -226,6 +248,8 @@ def analyze(article_text: str, market_data: str = "", watchlist_data: str = "") 
     prompt = ANALYSIS_PROMPT.format(
         article_text=article_text,
         market_data=market_data or "暂无市场行情数据",
+        storylines_block=storylines_block or "（未提供）",
+        pattern_block=pattern_block or "（归档积累中，暂无模式锚）",
     )
     if watchlist_data:
         # 数一下股票只数（数据块以 #### 分隔）
@@ -355,6 +379,48 @@ def analyze_macro(edition: str, data_blocks: str) -> str:
         f"### 📊 数据解读·{edition}（AI解读暂不可用）\n\n"
         "规则引擎数据如下，可先行阅读，稍后重跑对应命令补解读：\n\n"
         + data_blocks
+    )
+
+
+WEEKLY_PROMPT = """你是AI盘报的周报编辑。以下数据块全部为系统规则引擎核实的本周事实
+（主线状态/记分流水/观察点/日历），你的职责是把它们串成一份有记忆的周度复盘，
+让读者看见"这一周市场的故事线和自己的判断成色"。
+
+{data_blocks}
+
+## 周报输出要求（全文不超过1000字）
+
+⚠️ 格式铁律：相邻两行文字之间必须空一行；板块标题用 ### 三级标题，禁止####。
+
+### 📌 主线周演进
+- 每条主线一小段：编号+名称+当前状态(+本周迁移)+第N周，随后1-2句本周演进叙述
+  （基于log条目，不引入数据块外信息）
+- 本周新诞生的主线说明诞生逻辑；本周终结的主线给一句"墓志铭"式总结
+
+### ✅ 记分周汇总
+- 胜率数字原样引用（如 胜率67%），逐条或择要复盘本周对错及归因
+- 点出本周最有价值的一条对和一条错（哪条判断含金量最高/哪条错得最值得记住）
+
+### 🔍 观察点结算
+- 本周兑现/失效逐条一句话；仍挂起的列出下周到期项
+
+### 📅 下周日历
+- 逐条：日期+事项+一句为什么值得关注；标注"预计"的条目如实保留预计口径
+
+内容铁律：
+1. 所有数字与状态来自数据块，禁止编造；周数/胜率/✓❌/观察点状态是规则判定，只能解释不能改
+2. 无记录的部分如实写"本周无记录"，不硬凑
+3. 禁止买卖指令；语言克制说人话
+（铁律是对你的要求，不要出现在输出正文中）"""
+
+
+def analyze_weekly(data_blocks: str) -> str:
+    """周报：规则引擎本周事实块 → 周度复盘（AI只叙述不判定）"""
+    report = _call_llm(WEEKLY_PROMPT.replace("{data_blocks}", data_blocks))
+    return report or (
+        "### ⚠️ 周报AI分析暂不可用\n\n"
+        "规则引擎数据（主线/记分/观察点/日历）已归档，可稍后重跑 "
+        "`python runner.py weekly` 补解读：\n\n" + data_blocks
     )
 
 

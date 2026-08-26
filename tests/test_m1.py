@@ -39,24 +39,35 @@ def test_match_board():
 
 
 def test_sentiment():
-    p = {"breadth": {"up": 4089, "down": 1202},
-         "limits": {"limit_up": 65, "limit_down": 2, "blown": 22},
-         "turnover": {"today_yi": 18318, "chg_pct": None},
-         "failures": []}
-    g = sentiment_gauge(p)
-    # 手算：breadth=54.5 limit=94.0 blown=49.4（vol无昨值且无归档→缺席）
-    # 加权重归一(.45,.25,.15)/.85 → 0.529*54.5+0.294*94+0.176*49.4 = 65.1 → score=83
-    assert g["score"] == 83 and g["label"] == "亢奋", f"得{g}"
-    assert len(g["bar"]) == 20 and g["bar"].startswith("▓")
-    # 全缺 → None
-    g2 = sentiment_gauge({"failures": ["x"]})
-    assert g2["score"] is None and g2["label"] == "数据不足"
-    # 量价配合：放量+宽度负 → vol为负
-    p3 = {"breadth": {"up": 1000, "down": 4000},
-          "limits": {"limit_up": 5, "limit_down": 40, "blown": 10},
-          "turnover": {"today_yi": 20000, "chg_pct": 25.0}}
-    g3 = sentiment_gauge(p3)
-    assert g3["parts"]["vol"] < 0, "宽度为负时放量应记负分（恐慌放量）"
+    # 隔离真实情绪归档：_vol_from_history 会回源昨日成交额，带入则vol分项加入、手算失配
+    HIST = state.STATE_DIR / "sentiment_history.json"
+    hist_backup = HIST.read_text(encoding="utf-8") if HIST.exists() else None
+    if HIST.exists():
+        HIST.unlink()
+    try:
+        p = {"breadth": {"up": 4089, "down": 1202},
+             "limits": {"limit_up": 65, "limit_down": 2, "blown": 22},
+             "turnover": {"today_yi": 18318, "chg_pct": None},
+             "failures": []}
+        g = sentiment_gauge(p)
+        # 手算：breadth=54.5 limit=94.0 blown=49.4（vol无昨值且无归档→缺席）
+        # 加权重归一(.45,.25,.15)/.85 → 0.529*54.5+0.294*94+0.176*49.4 = 65.1 → score=83
+        assert g["score"] == 83 and g["label"] == "亢奋", f"得{g}"
+        assert len(g["bar"]) == 20 and g["bar"].startswith("▓")
+        # 全缺 → None
+        g2 = sentiment_gauge({"failures": ["x"]})
+        assert g2["score"] is None and g2["label"] == "数据不足"
+        # 量价配合：放量+宽度负 → vol为负
+        p3 = {"breadth": {"up": 1000, "down": 4000},
+              "limits": {"limit_up": 5, "limit_down": 40, "blown": 10},
+              "turnover": {"today_yi": 20000, "chg_pct": 25.0}}
+        g3 = sentiment_gauge(p3)
+        assert g3["parts"]["vol"] < 0, "宽度为负时放量应记负分（恐慌放量）"
+    finally:
+        if hist_backup is not None:
+            HIST.write_text(hist_backup, encoding="utf-8")
+        elif HIST.exists():
+            HIST.unlink()
     print(f"  [3] sentiment_gauge: 通过（今日样例={g['score']}分 刻度条{g['bar'][:8]}…）")
 
 

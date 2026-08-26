@@ -51,6 +51,13 @@ def today_str() -> str:
     return datetime.now(CST).strftime("%Y年%m月%d日")
 
 
+def monday_of(date_str: str = None) -> str:
+    """给定日期（默认今天，中国时区）所在周的周一 → 'YYYY-MM-DD'（周报区间用）"""
+    d = (datetime.strptime(date_str, "%Y-%m-%d").date()
+         if date_str else datetime.now(CST).date())
+    return (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
+
+
 def timestamp_to_date(ts: int) -> str:
     """Unix时间戳转日期字符串"""
     return datetime.fromtimestamp(ts, tz=CST).strftime("%Y年%m月%d日")

@@ -9,12 +9,15 @@
 落地检测：state/macro_seen.json 记每指标已见 REPORT_DATE；出现更新即数据日。
 """
 
+import calendar as _cal
 import time
+from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
 
 from src import state
+from src.utils import CST
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 DC = "https://datacenter-web.eastmoney.com/api/data/v1/get"
@@ -273,3 +276,45 @@ def format_macro_prompt(keys: list, data: dict, compares: dict, definitions: dic
 
     lines.append("\n（预期值对照：暂无免费数据源，本块只有实际值/前值/分位，AI不得虚构预期值）")
     return "\n".join(lines)
+
+
+# ── 发布日历（周报"下周日历"用） ──
+
+def next_publish_calendar(days: int = 14, data: dict = None) -> list:
+    """美国指标未来发布日（东财 PUBLISH_DATE 自带）→ [(日期, 文本)]。
+
+    data: collect_us() 结果（默认现场采集；测试可注入）。
+    """
+    if data is None:
+        data = collect_us()
+    today = datetime.now(CST).strftime("%Y-%m-%d")
+    horizon = (datetime.now(CST) + timedelta(days=days)).strftime("%Y-%m-%d")
+    out = []
+    for key, d in data.items():
+        if not d:
+            continue
+        np_ = d.get("next_publish", "")
+        if np_ and today <= np_ <= horizon:
+            out.append((np_, f"🇺🇸{US_INDICATORS[key]['label']}发布（东财日历）"))
+    return sorted(out)
+
+
+def cn_release_forecast(days: int = 14, today: str = None) -> list:
+    """中国指标惯例发布日推算 → [(日期, 文本)]。
+
+    官方无发布日历字段 → 按惯例窗口推算，一律标注"预计"，
+    以当日落地检测（landed_cn）为准（周报如实标注这一口径）。
+    """
+    base = (datetime.strptime(today, "%Y-%m-%d") if today
+            else datetime.now(CST)).date()
+    out = []
+    for i in range(1, days + 1):
+        d = base + timedelta(days=i)
+        last_day = _cal.monthrange(d.year, d.month)[1]
+        if d.day == 9:
+            out.append((d.strftime("%Y-%m-%d"), "🇨🇳CPI/PPI（惯例9日前后·预计）"))
+        elif d.day == 13:
+            out.append((d.strftime("%Y-%m-%d"), "🇨🇳金融数据：信贷/M2（惯例10-15日间·预计）"))
+        elif d.day == last_day:
+            out.append((d.strftime("%Y-%m-%d"), "🇨🇳PMI（惯例月末·预计）"))
+    return out
