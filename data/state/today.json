@@ -1,7 +1,21 @@
 {
-  "date": "2026-08-26",
+  "date": "2026-08-30",
   "morning": {},
   "noon_pushed": false,
   "night_pushed": false,
-  "weekly_pushed": true
+  "weekly_pushed": true,
+  "evening": {
+    "pushed": true,
+    "report_path": "data\\reports\\2026-08-30-evening.md",
+    "sentiment": 73,
+    "sentiment_label": "偏热",
+    "scoreboard": "无记分"
+  },
+  "pushed_event_ids": [
+    "http://finance.eastmoney.com/a/202608293859286820.html",
+    "http://finance.eastmoney.com/a/202608293859231270.html",
+    "http://finance.eastmoney.com/a/202608293858907659.html",
+    "https://data.eastmoney.com/notices/detail/300750/AN202608271828547306.html",
+    "https://data.eastmoney.com/notices/detail/300750/AN202608251828412217.html"
+  ]
 }

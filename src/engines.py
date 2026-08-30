@@ -654,3 +654,142 @@ def format_next_calendar(cal_stocks: list, us_cal: list, cn_cal: list,
     for d, text, note in items:
         lines.append(f"- {d[5:]} {text}{'｜' + note if note else ''}")
     return "\n".join(lines)
+
+
+# ═══════════════ 推送骨架（表达重构：四角色速览 + 账本刻度，规则直出） ═══════════════
+# 设计依据：doc/产品设计.md §5.2 —— 推送无固定骨架 → 四感只可见两个。
+# 骨架在 AI 输出之外拼装（事实与观点分离）：AI 无法改写速览与刻度。
+
+# 班次时刻表（账本尾注「下一班」与失败心跳共用）
+NEXT_SHIFT = {
+    "morning": "午间快讯 11:35（仅🟡以上才响）",
+    "macro_us": "午间快讯 11:35（仅🟡以上才响）",
+    "noon": "晚报 17:30",
+    "evening": "夜巡 20:30（仅🔴才响）",
+    "macro_cn": "夜巡 20:30（仅🔴才响）",
+    "night": "明晨 07:30 晨报",
+    "weekly": "下个工作日晨报 07:30",
+}
+
+
+def _zone_label(score: int) -> str:
+    """温度 → 五区名（速览行用，与站点驾驶舱同一套分区）"""
+    for lo, hi, name in ((80, 101, "亢奋"), (60, 80, "偏热"), (40, 60, "中性"),
+                         (20, 40, "偏冷"), (0, 20, "冰点")):
+        if lo <= score < hi:
+            return name
+    return "—"
+
+
+def digest_sentinel_line() -> str:
+    """速览第1行·哨兵结论（安全感）：读最近一次分诊快照。"""
+    day, labels = state.load_latest_labels()
+    if not labels:
+        return "🛡️ 哨兵：尚无分诊快照（晨报运行后开始盯盘）"
+    entries = [e for e in labels.values() if e.get("name")]
+    reds = [e for e in entries if str(e.get("label", "")).startswith("🔴")]
+    yels = [e for e in entries if str(e.get("label", "")).startswith("🟡")]
+    stale = "" if day == TODAY() else f"（{day[5:]}快照）"
+    if reds:
+        shown = "、".join(e["name"] for e in reds[:3]) + ("…" if len(reds) > 3 else "")
+        return f"🛡️ 哨兵：🔴 {len(reds)}只需注意（{shown}）{stale}"
+    if yels:
+        shown = "、".join(e["name"] for e in yels[:3]) + ("…" if len(yels) > 3 else "")
+        return f"🛡️ 哨兵：🟡 {len(yels)}只观察中（{shown}），其余无事{stale}"
+    return f"🛡️ 哨兵：✅ {len(entries)}只自选巡检通过，无事{stale}"
+
+
+def digest_translator_line() -> str:
+    """速览第2行·主线（理解感）：连载中的前3条。"""
+    lines = state.load_storylines().get("lines", [])
+    active = [l for l in lines if l.get("status") != "终结"]
+    if not active:
+        return "🗣️ 主线：暂无连载中的主线（市场叙事切换中）"
+    parts = [f"{l.get('name', '?')}·{l.get('status', '?')}第{max(l.get('weeks', 1), 1)}周"
+             for l in active[:3]]
+    more = f"（共{len(active)}条）" if len(active) > 3 else ""
+    return f"🗣️ 主线：{' ｜ '.join(parts)}{more}"
+
+
+def digest_anchor_line() -> str:
+    """速览第3行·温度（从容感）：最新读数 + 较昨变化。"""
+    hist = state._load_json("sentiment_history.json", {})
+    entries = sorted((d, v.get("score")) for d, v in hist.items()
+                     if v.get("score") is not None)
+    if not entries:
+        return "🌡️ 温度：积累中（晚报运行后每日记录）"
+    _, score = entries[-1]
+    delta = ""
+    if len(entries) >= 2:
+        d = entries[-1][1] - entries[-2][1]
+        delta = f"（较昨{'+' if d > 0 else ''}{d}）" if d else "（较昨持平）"
+    return f"🌡️ 温度：{score} {_zone_label(score)}{delta}"
+
+
+def digest_ledger_line() -> str:
+    """速览第4行·账本（成长感）：全量胜率（✓=1分/部分=0.5分）。"""
+    stats = weekly_judgment_stats(state.load_judgments("0000-01-01", "9999-12-31"))
+    if not stats["rows"]:
+        return "🧾 账本：待开账（首个预判快照日后开始记分）"
+    return f"🧾 账本：胜率{stats['rate']}%（累计{stats['total']}条）"
+
+
+def digest_delta_line() -> str:
+    """速览附加行「今日」（晚报用）：规则对比昨日，只报变化量。"""
+    parts = []
+    data = state._load_json("label_history.json", {})
+    days = sorted(data.keys())
+    if len(days) >= 2:
+        prev = {e.get("code"): e.get("label") for e in data[days[-2]]}
+        n = sum(1 for e in data[days[-1]] if prev.get(e.get("code")) != e.get("label"))
+        parts.append(f"分诊{n}只变动" if n else "分诊无变动")
+    today = TODAY()
+    n_logs = sum(1 for l in state.load_storylines().get("lines", [])
+                 for g in (l.get("log") or []) if g.get("date") == today)
+    if n_logs:
+        parts.append(f"主线新动态×{n_logs}")
+    n_new = sum(1 for r in state.load_judgments("0000-01-01", "9999-12-31")
+                if r.get("date") == today)
+    n_new += sum(1 for e in state._load_json("event_archive.json", [])
+                 if e.get("date") == today)
+    parts.append(f"+{n_new}新账" if n_new else "无新账")
+    return ("📅 今日：" + " · ".join(parts)) if parts else ""
+
+
+def three_question_digest(with_delta: bool = False) -> str:
+    """四角色速览（4-5行，全部规则直出）。四感各一行：
+    安全感(哨兵)/理解感(主线)/从容感(温度)/成长感(账本)。"""
+    rows = [digest_sentinel_line(), digest_translator_line(),
+            digest_anchor_line(), digest_ledger_line()]
+    if with_delta:
+        delta = digest_delta_line()
+        if delta:
+            rows.append(delta)
+    return "**【今日速览】**\n\n" + "\n\n".join(rows)
+
+
+def ledger_snapshot(cmd: str) -> str:
+    """账本刻度尾注：四数字+累计 —— 每次触点可见复利在变厚。"""
+    jrows = state.load_judgments("0000-01-01", "9999-12-31")
+    stats = weekly_judgment_stats(jrows)
+    rate = f"{stats['rate']}%" if jrows else "待开账"
+    n_story = sum(1 for l in state.load_storylines().get("lines", [])
+                  if l.get("status") != "终结")
+    n_pat = len(state._load_json("event_archive.json", []))
+    n_watch = len(state.load_watchpoints().get("active", []))
+    return (f"---\n📌 **账本刻度**：胜率 {rate}（累计{len(jrows)}条）· "
+            f"主线 {n_story} · 模式库 {n_pat}例 · 观察点 {n_watch}　"
+            f"（✓=1分，部分=0.5分）\n⏰ 下一班：{NEXT_SHIFT.get(cmd, '—')}")
+
+
+def dress_report(cmd: str, report: str) -> str:
+    """推送骨架拼装：头部速览 + AI正文 + 账本尾注。
+
+    必读/结算类（晨报/晚报/周报）= 全骨架；打断类（午间/夜巡/数据解读）
+    = 正文 + 尾注（警报本身即头版，不打断 1% 日子里的读取速度）。
+    """
+    body = report.rstrip("\n")
+    head = ""
+    if cmd in ("morning", "evening", "weekly"):
+        head = three_question_digest(with_delta=(cmd == "evening")) + "\n\n---\n\n"
+    return f"{head}{body}\n\n{ledger_snapshot(cmd)}\n"

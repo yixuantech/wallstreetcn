@@ -114,3 +114,34 @@ grep CRON /var/log/syslog | grep wallstreetcn
 - `.env` 不入库（已gitignore）；服务器上 `chmod 600 .env`
 - `data/watchlist.json` 不入库；`chmod 600`（个人持仓隐私）
 - `logs/` 不入库（已gitignore）
+
+## 八、Web 查看（四角色驾驶舱 + 报告归档）
+
+每次推送成功后自动全量重建 `site/` 静态站（也可手动：`./venv/bin/python runner.py site`）。
+
+**方式一：本地/内网直看（默认，零配置）**
+
+```bash
+# 常驻内网服务（仅本机可访问）
+cd /opt/wallstreetcn/site && python -m http.server 8080 --bind 127.0.0.1
+# 浏览器打开 http://127.0.0.1:8080
+```
+
+**方式二：外网访问（可选，必须加鉴权）**
+
+⚠️ 报告与状态含个人持仓和判断记录，**不要裸露公网**。nginx 样例：
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name your.domain.com;
+    root /opt/wallstreetcn/site;
+    index index.html;
+    # TLS证书配置略（certbot 可自动签发）
+    auth_basic "AI盘报";                        # 基础认证
+    auth_basic_user_file /etc/nginx/.htpasswd;  # htpasswd -c 生成
+}
+```
+
+- `site/` 不入库（已 gitignore），是纯生成产物
+- 站点内容确定性（无时间戳），重复构建逐字节一致

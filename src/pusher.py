@@ -4,6 +4,7 @@ import time
 import requests
 
 from src.config import Config
+from src.report_formatter import markdown_to_wechat_html
 
 
 class PushPlusPush:
@@ -18,17 +19,22 @@ class PushPlusPush:
 
         Args:
             title: 消息标题
-            content: Markdown格式内容
+            content: Markdown格式内容（发送前转HTML）
             verdict: 预判方向（看多/看空/看平），用于标题标记
 
         Returns:
             PushPlus API响应
+
+        换行说明：PushPlus 的 markdown 模板不认 \n 换行（官方文档要求 <br/>
+        或句末反斜杠），markdown 直接推送会段落/表格全部粘连。因此统一走
+        html 模板 + 复用公众号已验证的 md→HTML 渲染器（段落/表格/列表原生换行）。
         """
+        html = markdown_to_wechat_html(content, add_footer=False)
         data = {
             "token": self.token,
             "title": title,
-            "content": content,
-            "template": "markdown",
+            "content": html,
+            "template": "html",
         }
 
         print(f"[Pusher] 推送PushPlus消息: {title}")

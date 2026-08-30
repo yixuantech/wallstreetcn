@@ -24,3 +24,7 @@ data/watchlist.json
 
 # ZCode 会话产物
 .zcode/
+
+# Web静态站（生成产物）
+site/
+site-demo/

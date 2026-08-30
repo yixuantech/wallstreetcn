@@ -10,6 +10,7 @@
   macro_us   数据解读·美国档（美国数据落地次晨07:45推送）
   night      夜巡（🔴关键词命中才推紧急警报，20:30）
   weekly     周报（主线周演进+记分胜率+观察点结算+下周日历，周六09:00）
+  site       全量重建静态站（四角色驾驶舱+报告归档；每次推送后也会自动重建）
 """
 
 import sys
@@ -34,7 +35,8 @@ from src.engines import (sentiment_gauge, archive_sentiment, format_sentiment_pr
                          format_noon_prompt, format_alert_prompt, macro_compare,
                          archive_pattern_events, format_pattern_bank,
                          weekly_judgment_stats, format_weekly_judgments,
-                         format_weekly_watchpoints, format_next_calendar)
+                         format_weekly_watchpoints, format_next_calendar,
+                         dress_report, NEXT_SHIFT)
 from src.pusher import PushPlusPush
 from src.utils import (is_already_processed, mark_processed, today_str,
                        is_today, cleanup_old_ids, is_trading_day, monday_of)
@@ -87,6 +89,7 @@ def cmd_morning():
     # 5.5 自选股数据
     watchlist_stocks = collect_all()
     watchlist_data = format_watchlist_prompt(watchlist_stocks) if watchlist_stocks else ""
+    state.save_label_snapshot(watchlist_stocks)   # 晨巡分诊快照（站点哨兵区/个股页）
 
     # 5.6 主线连载状态 + 历史模式库（M4：主线JSON进出晨报）
     storyline_lines = state.load_storylines().get("lines", [])
@@ -111,7 +114,8 @@ def cmd_morning():
         note = f"，变更: {'；'.join(sl_changes)}" if sl_changes else ""
         print(f"[Morning] 主线合并完成（活跃{active_n}条{note}）")
 
-    # 7. 报告落盘（地基：晚报记分与周报的原材料）
+    # 7. 报告落盘（地基：晚报记分与周报的原材料；骨架=速览头+账本尾，规则直出随文档归档）
+    report = dress_report("morning", report)
     report_dir = Path("data/reports")
     report_dir.mkdir(parents=True, exist_ok=True)
     report_path = report_dir / f"{datetime.now(CST).strftime('%Y-%m-%d')}.md"
@@ -124,6 +128,7 @@ def cmd_morning():
     if watchlist_stocks:
         title += f" | {label_summary(watchlist_stocks)}"
     pusher.push(title, report, verdict)
+    _rebuild_site()
 
     # 9. 当日快照存档（午间/夜巡防重 + 晚报记分依据）
     event_ids = []
@@ -192,6 +197,7 @@ def cmd_evening():
 
     # 3. 自选股再采集（收盘价+当日新公告，也是观察点兑现检测的输入）
     stocks = collect_all()
+    state.save_label_snapshot(stocks)             # 收盘分诊快照（覆盖晨巡版）
 
     # 4. 判断记分牌（今晨快照 vs 实际收盘）
     sb = scoreboard(today.get("morning", {}), panorama, stocks)
@@ -229,7 +235,8 @@ def cmd_evening():
     ])
     report = analyze_evening(data_blocks)
 
-    # 7. 落盘 + 推送
+    # 7. 落盘 + 推送（骨架=速览头含「今日变化」行+账本尾；分诊/记分/归档均已入库，速览读到的即今日最新）
+    report = dress_report("evening", report)
     date_str = datetime.now(CST).strftime("%Y-%m-%d")
     report_path = Path("data/reports") / f"{date_str}-evening.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -239,6 +246,7 @@ def cmd_evening():
     score_txt = f"情绪{gauge['score']}·{gauge['label']}" if gauge.get("score") is not None else "情绪缺"
     title = f"🌙 AI盘报·晚报 | {today_str()} | {scoreboard_summary(sb)} | {score_txt}"
     PushPlusPush().push(title, report)
+    _rebuild_site()
 
     # 8. 快照 + 晚间新增事件回写ID池（夜巡防重）
     today["evening"] = {
@@ -316,6 +324,7 @@ def cmd_noon():
     indices_txt = " ｜ ".join(indices_line) or "指数行情缺失"
 
     report = analyze_noon(indices_txt, format_noon_prompt(flagged))
+    report = dress_report("noon", report)   # 打断类：仅账本尾注，警报本身即头版
 
     date_str = datetime.now(CST).strftime("%Y-%m-%d")
     report_path = Path("data/reports") / f"{date_str}-noon.md"
@@ -325,6 +334,7 @@ def cmd_noon():
     names = " ".join(s.name for s, _ in flagged)
     title = f"⚡ AI盘报·午间快讯 | {today_str()} | {names}"
     PushPlusPush().push(title, report)
+    _rebuild_site()
 
     # 只回收已推送的事件ID（🟢新增留给晚报收盘段展示）
     today["noon_pushed"] = True
@@ -369,6 +379,7 @@ def cmd_night():
         return
 
     report = analyze_alert(format_alert_prompt(alerts))
+    report = dress_report("night", report)  # 打断类：仅账本尾注
 
     date_str = datetime.now(CST).strftime("%Y-%m-%d")
     report_path = Path("data/reports") / f"{date_str}-night.md"
@@ -378,6 +389,7 @@ def cmd_night():
     names = " ".join(s.name for s, _, _ in alerts)
     title = f"🚨 AI盘报·紧急警报 | {today_str()} | {names}"
     PushPlusPush().push(title, report)
+    _rebuild_site()
 
     today["night_pushed"] = True
     known = set(_pushed_event_ids(today))
@@ -443,6 +455,7 @@ def _cmd_macro(edition: str, region: str):
     blocks = format_macro_prompt(fresh, data, compares, definitions, concepts, watch_names)
 
     report = analyze_macro(edition, blocks)
+    report = dress_report(f"macro_{region}", report)   # 打断类：仅账本尾注
 
     date_str = datetime.now(CST).strftime("%Y-%m-%d")
     report_path = Path("data/reports") / f"{date_str}-macro-{region}.md"
@@ -452,6 +465,7 @@ def _cmd_macro(edition: str, region: str):
     names = "、".join(definitions[k]["label"] for k in fresh)
     title = f"📊 AI盘报·数据解读{edition} | {today_str()} | {names}"
     PushPlusPush().push(title, report)
+    _rebuild_site()
 
     # 落地登记（推送成功后才标记已见，防丢期次）
     if region == "cn":
@@ -467,6 +481,31 @@ def _watch_names() -> list:
     """自选股名称（联动段原料；读配置文件，不做全量采集）"""
     from src.watchlist import load_watchlist
     return [w.get("name", "") for w in load_watchlist()]
+
+
+def _rebuild_site():
+    """推送成功后重建静态站（表达层原型：驾驶舱+归档）。失败只告警，不影响推送。"""
+    try:
+        from src.site_builder import build_site
+        result = build_site()
+        print(f"[Site] 静态站已重建（{result['reports']}篇报告 → {result['out']}）")
+    except Exception as e:
+        print(f"[Site] 静态站重建失败(不影响推送): {e}")
+
+
+def cmd_site():
+    """全量重建静态站：四角色驾驶舱 + 报告归档（本地浏览/原型审阅入口）"""
+    print(f"{'='*60}")
+    print(f"  AI盘报 · 静态站重建")
+    print(f"  运行时间: {datetime.now(CST).strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"{'='*60}")
+
+    from src.site_builder import build_site
+    result = build_site()
+    print(f"[Site] 已收录 {result['reports']} 篇报告")
+    print(f"[Site] 输出目录: {result['out']}")
+    print(f"[Site] 本地查看: 浏览器打开 {result['out']}\\index.html"
+          f"（或 cd site && python -m http.server 8080）")
 
 
 def cmd_weekly():
@@ -505,7 +544,8 @@ def cmd_weekly():
     # 2. AI周报（只叙述不判定）
     report = analyze_weekly(data_blocks)
 
-    # 3. 落盘 + 推送
+    # 3. 落盘 + 推送（结算类：全骨架——速览头与账本结算正文呼应）
+    report = dress_report("weekly", report)
     report_path = Path("data/reports") / f"{date_str}-weekly.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
@@ -515,6 +555,7 @@ def cmd_weekly():
     week_txt = f"{week_start[5:].replace('-', '/')}当周"
     title = f"📖 AI盘报·周报 | {week_txt} | {rate_txt}"
     PushPlusPush().push(title, report)
+    _rebuild_site()
 
     today["weekly_pushed"] = True
     state.save_today(today)
@@ -535,11 +576,56 @@ COMMANDS = {
     "macro_us": cmd_macro_us,
     "night": cmd_night,
     "weekly": cmd_weekly,
+    "site": cmd_site,
 }
+
+# 推送班次（生成失败需失败心跳）；site 等工具命令失败只走日志
+_PUSH_CMDS = {"morning", "noon", "evening", "macro_cn", "macro_us", "night", "weekly"}
+
+_SHIFT_NAME = {"morning": "🌅晨报", "noon": "⚡午间快讯", "evening": "🌙晚报",
+               "macro_cn": "📊数据解读(中国)", "macro_us": "📊数据解读(美国)",
+               "night": "🚨夜巡", "weekly": "📖周报"}
+
+
+def _push_failure_heartbeat(cmd: str, err: Exception) -> None:
+    """失败心跳：推送班次生成失败必须出声（宪法 §2「沉默=无事」不可被故障占用）。
+
+    用户收不到推送时无法区分"没事"与"系统挂了"——本通知把后者显式说出来，
+    并给出下一班恢复时间。推送通道本身也挂时只留日志（无法触达属物理极限）。
+    """
+    name = _SHIFT_NAME.get(cmd, cmd)
+    next_shift = NEXT_SHIFT.get(cmd, "见栏目时刻表")
+    title = f"⚠️ AI盘报·{name}生成失败 | {today_str()}"
+    body = (f"**{name}生成失败**（{datetime.now(CST).strftime('%H:%M')}）\n\n"
+            f"原因：`{type(err).__name__}: {str(err)[:120]}`\n\n"
+            f"本班未发出，哨兵分诊暂停一班。\n\n"
+            f"⏰ **下一班：{next_shift}** 自动恢复；若连续失败请查看服务器日志。")
+    try:
+        result = PushPlusPush().push(title, body)
+        if result.get("code") != 200:
+            print(f"[Heartbeat] 失败通知未送达: {result}")
+    except Exception as pe:  # 心跳自身失败绝不再抛（不能掩盖原始异常）
+        print(f"[Heartbeat] 失败通知推送异常(无法触达): {pe}")
+
+
+def run(cmd: str) -> int:
+    """命令分发入口。Returns: 0成功 / 1班次失败(已发失败心跳) / 2用法错误"""
+    if cmd not in COMMANDS:
+        print("AI盘报 — 用法: python runner.py <morning|noon|evening|macro_cn|macro_us|night|weekly|site>")
+        return 2
+    if cmd not in _PUSH_CMDS:
+        COMMANDS[cmd]()
+        return 0
+    try:
+        COMMANDS[cmd]()
+    except Exception as e:
+        import traceback
+        print(f"[Runner] {cmd} 执行失败: {e}", file=sys.stderr)
+        traceback.print_exc()
+        _push_failure_heartbeat(cmd, e)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
-        print("AI盘报 — 用法: python runner.py <morning|noon|evening|macro_cn|macro_us|night|weekly>")
-        sys.exit(1)
-    COMMANDS[sys.argv[1]]()
+    sys.exit(run(sys.argv[1] if len(sys.argv) > 1 else ""))

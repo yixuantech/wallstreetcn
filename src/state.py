@@ -41,6 +41,43 @@ def _save_json(name: str, data) -> None:
 
 # ── 当日快照 ──
 
+def save_label_snapshot(stocks) -> None:
+    """自选股分诊快照写入 label_history.json（哨兵区/个股页回看用）。
+
+    结构：{"2026-08-27": [{"code","name","label","reason","price","chg_pct"}...]}
+    同日多次采集（晨巡/收盘）后写覆盖，保留最近90天。
+    """
+    today = datetime.now(CST).strftime("%Y-%m-%d")
+    data = _load_json("label_history.json", {})
+    data[today] = [{"code": s.code, "name": s.name, "label": s.label,
+                    "reason": getattr(s, "label_reason", ""),
+                    "price": s.price, "chg_pct": s.chg_pct}
+                   for s in stocks]
+    keys = sorted(data.keys())[-90:]
+    _save_json("label_history.json", {k: data[k] for k in keys})
+
+
+def load_latest_labels() -> tuple:
+    """最近一天的分诊快照。Returns: (日期, {code: entry}) 或 ("", {})"""
+    data = _load_json("label_history.json", {})
+    if not data:
+        return "", {}
+    day = max(data.keys())
+    return day, {e.get("code"): e for e in data[day] if e.get("code")}
+
+
+def load_label_history(code: str, days: int = 14) -> list:
+    """个股近N天分诊历史（个股页用），旧→新"""
+    data = _load_json("label_history.json", {})
+    out = []
+    for day in sorted(data.keys())[-days:]:
+        for e in data[day]:
+            if e.get("code") == code:
+                out.append({"date": day, **e})
+                break
+    return out
+
+
 def load_today() -> dict:
     """读当日快照。跨日自动重置：文件里的日期非今天则返回空白快照。
 
