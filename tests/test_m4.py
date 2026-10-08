@@ -17,7 +17,7 @@ from src.engines import (archive_pattern_events, format_pattern_bank,
                          weekly_judgment_stats, format_weekly_judgments,
                          format_weekly_watchpoints, format_next_calendar)
 from src.macro_data import cn_release_forecast, next_publish_calendar
-from src.utils import monday_of
+from src.utils import CST, monday_of
 from src.watchlist import StockInfo
 
 W35_TUE = "2026-08-25"      # 2026-W35 周二
@@ -228,9 +228,11 @@ def test_weekly_blocks():
             W.unlink()
     # 下次日历：自选股事件 + 美/中宏观
     s = StockInfo(code="600519", name="贵州茅台")
-    s.calendar_events = [{"date": "2026-08-30", "kind": "中报披露", "text": "📅 08-30 中报披露"}]
-    cal = format_next_calendar([s], [("2026-09-02", "🇺🇸非农发布")],
-                               [("2026-09-09", "🇨🇳CPI/PPI（预计）")])
+    ev_d = (datetime.now(CST) + timedelta(days=2)).strftime("%Y-%m-%d")   # 动态日期，防过期失效
+    us_d = (datetime.now(CST) + timedelta(days=4)).strftime("%Y-%m-%d")
+    cn_d = (datetime.now(CST) + timedelta(days=8)).strftime("%Y-%m-%d")
+    s.calendar_events = [{"date": ev_d, "kind": "中报披露", "text": f"📅 {ev_d[5:]} 中报披露"}]
+    cal = format_next_calendar([s], [(us_d, "🇺🇸非农发布")], [(cn_d, "🇨🇳CPI/PPI（预计）")])
     assert "贵州茅台·中报披露" in cal and "非农" in cal and "CPI" in cal
     # 中国惯例窗口推算（可注入today，确定性）
     cn = cn_release_forecast(14, today="2026-09-01")
@@ -238,7 +240,6 @@ def test_weekly_blocks():
     cn2 = cn_release_forecast(14, today="2026-09-20")
     assert [d for d, _ in cn2] == ["2026-09-30"], "9/20起14天：仅月末PMI"
     # 美国发布日历（注入数据，不联网）：窗口内命中/窗口外剔除
-    from src.utils import CST
     today = datetime.now(CST)
     fake = {"非农": {"next_publish": (today + timedelta(days=5)).strftime("%Y-%m-%d")},
             "失业率": None,
